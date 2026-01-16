@@ -112,8 +112,20 @@ namespace KickOffEvent.Hubs
             {
                 var session = await GetActiveSessionOrThrow();
 
+
                 var voterId = GetUserId();
                 var voterName = GetUserName();
+
+                var existingSession = await _db.VotingSessions
+                    .FirstOrDefaultAsync(s => s.Id == session.Id && s.IsActive);
+
+                if (existingSession == null)
+                    throw new HubException("Session does not exist or is not active.");
+
+                var voter = await _db.Users.FirstOrDefaultAsync(u => u.Id == voterId);
+                if (voter == null)
+                    throw new HubException("Voter does not exist.");
+
 
                 // ❌ Already voted check (HARD LOCK)
                 var alreadyVoted = await _db.Votes.AnyAsync(v =>
@@ -164,7 +176,7 @@ namespace KickOffEvent.Hubs
                     VoterName = voterName,
                     CandidateUserId = female.Id,
                     CandidateName = female.UserName,
-                    Category = male.Gender,
+                    Category = female.Gender,
                     CreatedAtUtc = DateTime.UtcNow
                 });
 
@@ -173,8 +185,8 @@ namespace KickOffEvent.Hubs
                 // 🔥 Realtime result broadcast
                 var result = await BuildResult(session.Id);
 
-                await Clients.Group(session.Id.ToString())
-                    .SendAsync("ResultUpdated", result);
+                Console.WriteLine("📊 Broadcasting result:", result);
+                await Clients.All.SendAsync("ResultUpdated", result);
             }
             catch (Exception ex)
             {
